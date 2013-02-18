@@ -1,0 +1,55 @@
+!obj:pylearn2.train.Train {
+    dataset: &train !obj:contest_dataset.ContestDataset {
+        which_set: 'train',
+        start: 0,
+        stop: 3500,
+        preprocessor : !obj:pylearn2.datasets.preprocessing.Standardize {}
+    },
+    model: !obj:pylearn2.models.mlp.MLP {
+        layers: [ !obj:pylearn2.models.mlp.RectifiedLinear {
+                     layer_name: 'h0',
+                     dim: 500,
+                     sparse_init: 15,
+                 }, !obj:pylearn2.models.mlp.Softmax {
+                     layer_name: 'y',
+                     n_classes: 7,
+                     irange: 0.
+                 }
+                ],
+        nvis: 2304,
+    },
+    algorithm: !obj:pylearn2.training_algorithms.bgd.BGD {
+        batch_size: 100,
+        line_search_mode: 'exhaustive',
+        monitoring_dataset:
+            {
+                'train' : *train,
+                'test'  : !obj:contest_dataset.ContestDataset {
+                    which_set: 'train',
+                    start: 3500,
+                    stop: 4100,
+                    preprocessor : !obj:pylearn2.datasets.preprocessing.Standardize {}
+                }
+            },
+        cost: !obj:pylearn2.costs.cost.SumOfCosts { costs: [
+            !obj:pylearn2.costs.cost.MethodCost {
+                method: 'cost_from_X',
+                supervised: 1
+            }, !obj:pylearn2.models.mlp.WeightDecay {
+                coeffs: [ .00110, .00110 ]
+            }
+            ]
+        },
+        termination_criterion: !obj:pylearn2.termination_criteria.MonitorBased {
+            channel_name: "test_y_misclass",
+            prop_decrease: 0.,
+            N: 15
+        }
+    },
+    extensions: [
+        !obj:pylearn2.train_extensions.best_params.MonitorBasedSaveBest {
+             channel_name: 'test_y_misclass',
+             save_path: "mlp_best.pkl"
+        }
+    ],
+}
