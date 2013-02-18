@@ -91,9 +91,8 @@ print "----------------------------------------------------------------------"
 
 # Extract the base folder to use to load the models
 baseFolder =  "./"
-if len(sys.args) >= 2:
-else:
-baseFolder =  "./"
+if len(sys.argv) >= 2:
+    baseFolder = sys.argv[1]
 
 # Find all the model files in subfolders of the current folder
 print "Exploring subfolders to find model files"
