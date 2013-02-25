@@ -28,7 +28,7 @@ class ImageAffineTransformer:
         self.seed = seed
         
         # Seed numpy.random to ensure reproducibility
-        #numpy.random.seed(self.seed)
+        numpy.random.seed(self.seed)
     
     
     def perform(self, X):
