@@ -1,0 +1,127 @@
+!obj:pylearn2.train.Train {
+    dataset: &train2 !obj:keypoints_dataset.FacialKeypointDataset {
+        which_set: 'train',
+        preprocessor: !obj:pylearn2.datasets.preprocessing.Pipeline {
+            items: [
+                !obj:pylearn2.datasets.preprocessing.GlobalContrastNormalization {},
+                !obj:pylearn2.datasets.preprocessing.Standardize {},
+                !obj:pylearn2.datasets.preprocessing.ShuffleAndSplit {
+                    seed: 42,
+                    start: 0,
+                    stop: 6500,
+                },
+            ]
+        },
+        fit_preprocessor: True,
+        fit_test_preprocessor: False,
+    },
+
+    dataset: !obj:contestTransformerDatasetWithLabels.TransformerDataset {
+        raw : &train !obj:keypoints_dataset.FacialKeypointDataset {
+            which_set: 'train',
+    
+            preprocessor: !obj:pylearn2.datasets.preprocessing.Pipeline {
+                items: [
+                    !obj:pylearn2.datasets.preprocessing.GlobalContrastNormalization {},
+                    !obj:pylearn2.datasets.preprocessing.Standardize {},
+                    !obj:pylearn2.datasets.preprocessing.ShuffleAndSplit {
+                        seed: 42,
+                        start: 0,
+                        stop: 6500,
+                    },
+                ]
+            },
+            fit_preprocessor: True,
+            fit_test_preprocessor: False,
+        },
+        transformer : !obj:transformerWithLabels.TransformationPipeline {
+            input_space: !obj:pylearn2.space.Conv2DSpace {
+                shape: [96, 96],
+                num_channels: 1,
+            },
+            transformations: [
+                #!obj:transformerWithLabels.Occlusion {},
+                #!obj:transformerWithLabels.HalfFace {},
+                #!obj:transformerWithLabels.Translation {},
+                #!obj:transformerWithLabels.Scaling {},
+                #!obj:transformerWithLabels.Rotation {},
+                !obj:transformerWithLabels.Flipping {}
+            ]
+        },
+        space_preserving : True,
+    },
+
+
+    # Our model will simply be a MLP with one Tanh layer
+    model: !obj:pylearn2.models.mlp.MLP {
+        layers: [
+                 !obj:pylearn2.models.mlp.PretrainedLayer {
+                     layer_name: 'h0',
+                     layer_content: !pkl: "autoencoder_last.pkl",
+                 },
+                 !obj:pylearn2.models.mlp.RectifiedLinear {
+                     layer_name: 'h1',
+                     dim: 8000,
+                     sparse_init: 15,
+                 },
+                 !obj:pylearn2.models.mlp.Linear {
+                     layer_name: 'y',
+                     dim: 30,
+                     irange: 0.,
+                 }
+                ],
+        nvis: 9216
+    },
+
+    # We use SGD as our training algorithm
+    algorithm: !obj:pylearn2.training_algorithms.sgd.SGD {
+        batch_size: 100,
+        learning_rate: 0.000005,
+        init_momentum: .7,       
+        monitoring_dataset:
+            {
+                'train' : *train ,
+                'valid' : !obj:keypoints_dataset.FacialKeypointDataset {
+                    which_set: 'train',
+                    preprocessor: !obj:pylearn2.datasets.preprocessing.Pipeline {
+                                items: [
+                                    !obj:pylearn2.datasets.preprocessing.GlobalContrastNormalization {},
+                                    !obj:pylearn2.datasets.preprocessing.Standardize {},
+                                    !obj:pylearn2.datasets.preprocessing.ShuffleAndSplit {
+                                        seed: 42,
+                                        start: 6500,
+                                        stop: 7049,
+                                    },
+                                ]
+                            },
+                            fit_preprocessor: True,
+                            fit_test_preprocessor: True,
+
+                    }
+                # We don't have labels for the public test set
+            },
+        # The cost function is
+        cost: !obj:pylearn2.costs.mlp.missing_target_cost.MissingTargetCost {
+        },
+        
+        # The termination criteria
+        termination_criterion: !obj:pylearn2.termination_criteria.MonitorBased {
+            channel_name: "valid_objective",
+            N: 50,
+        },
+    },
+
+    save_freq: 500,
+    save_path: "mlp.pkl",
+
+    extensions: [
+        !obj:pylearn2.train_extensions.best_params.MonitorBasedSaveBest {
+             channel_name: 'valid_objective',
+             save_path: "best_mlp_6000.pkl"
+        },
+        !obj:pylearn2.training_algorithms.sgd.OneOverEpoch {
+            start: 30,
+            half_life: 5,
+        },
+    ]
+}
