@@ -1,0 +1,85 @@
+
+!obj:pylearn2.train.Train {
+
+    dataset: &train !obj:keypoints_dataset.FacialKeypointDataset {
+        which_set: 'train',
+        preprocessor: !obj:pylearn2.datasets.preprocessing.Pipeline {
+            items: [
+                !obj:pylearn2.datasets.preprocessing.GlobalContrastNormalization {},
+                !obj:pylearn2.datasets.preprocessing.Standardize {},
+                !obj:pylearn2.datasets.preprocessing.ShuffleAndSplit {
+                    seed: 42,
+                    start: 0,
+                    stop: 6500,
+                },
+            ]
+        },
+        fit_preprocessor: True,
+        fit_test_preprocessor: True,
+    },
+
+    # Our model will simply be a MLP with one Tanh layer
+    model: !obj:pylearn2.models.autoencoder.DenoisingAutoencoder {
+        corruptor: !obj:pylearn2.corruption.BinomialCorruptor {
+            corruption_level: 0.5,
+        },
+        nvis: 9216,
+        nhid: 2000,
+        act_enc: !obj:activationFunctions.Rectifier {},
+        act_dec: 'linear',
+        tied_weights: True,
+    },
+
+    # We use SGD as our training algorithm
+    algorithm: !obj:pylearn2.training_algorithms.sgd.SGD {
+        batch_size: 100,
+        learning_rate: 0.0005,
+        init_momentum: .5,
+        
+        monitoring_dataset:
+            {
+                'train' : *train ,
+                'valid' : !obj:keypoints_dataset.FacialKeypointDataset {
+                    which_set: 'train',
+                    preprocessor: !obj:pylearn2.datasets.preprocessing.Pipeline {
+                                items: [
+                                    !obj:pylearn2.datasets.preprocessing.GlobalContrastNormalization {},
+                                    !obj:pylearn2.datasets.preprocessing.Standardize {},
+                                    !obj:pylearn2.datasets.preprocessing.ShuffleAndSplit {
+                                        seed: 42,
+                                        start: 6500,
+                                        stop: 7049,
+                                    },
+                                ]
+                            },
+                            fit_preprocessor: True,
+                            fit_test_preprocessor: True,
+
+                    }
+                # We don't have labels for the public test set
+            },
+        # The cost function is
+        cost: !obj:pylearn2.costs.autoencoder.MeanSquaredReconstructionError {
+        },
+        
+        # The termination criteria
+        termination_criterion: !obj:pylearn2.termination_criteria.MonitorBased {
+            channel_name: "valid_objective",
+            N: 30,
+        },
+    },
+
+    save_freq: 500,
+    save_path: "autoencoder_last.pkl",
+
+    extensions: [
+        #!obj:pylearn2.train_extensions.best_params.MonitorBasedSaveBest {
+        #     channel_name: 'valid_objective',
+        #     save_path: "autoencoder.pkl"
+        #},
+        !obj:pylearn2.training_algorithms.sgd.OneOverEpoch {
+            start: 100,
+            half_life: 20,
+        },
+    ]
+}
